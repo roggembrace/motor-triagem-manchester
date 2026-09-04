@@ -1,5 +1,5 @@
 # 🏥 Motor de Triagem Clínica com Prioridade Dinâmica (Protocolo de Manchester)
-
+[🔗 Acessar Demonstração Interativa Online](https://roggembrace.github.io/motor-triagem-manchester/)
 <p align="center">
   <img src="https://img.shields.io/badge/Java-17%2B-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white" alt="Java Version" />
   <img src="https://img.shields.io/badge/Apache_Maven-C71A36?style=for-the-badge&logo=apachemaven&logoColor=white" alt="Maven" />
