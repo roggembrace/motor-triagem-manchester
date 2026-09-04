@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protótipo: Motor de Triagem Manchester</title>
+    <style>
+        :root {
+            --vermelho: #e74c3c;
+            --laranja: #e67e22;
+            --amarelo: #f1c40f;
+            --verde: #2ecc71;
+            --azul: #3498db;
+            --dark: #2c3e50;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f8fafc; color: var(--dark); }
+        header { background: #1e293b; color: white; padding: 20px; text-align: center; }
+        .container { max-width: 1000px; margin: 20px auto; padding: 0 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .container { grid-template-columns: 1fr; } }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+        h2 { margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 0.9rem; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; }
+        .checkbox-group { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+        button { background: #0284c7; color: white; border: none; padding: 10px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; font-size: 1rem; }
+        button:hover { background: #0369a1; }
+        .btn-call { background: #16a34a; margin-top: 10px; }
+        .btn-call:hover { background: #15803d; }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; color: white; font-weight: bold; font-size: 0.8rem; }
+        .bg-vermelho { background: var(--vermelho); }
+        .bg-laranja { background: var(--laranja); }
+        .bg-amarelo { background: #d97706; }
+        .bg-verde { background: var(--verde); }
+        .bg-azul { background: var(--azul); }
+        .patient-card { border-left: 6px solid #cbd5e1; background: #f8fafc; padding: 12px; border-radius: 4px; margin-bottom: 10px; }
+        .current-call { background: #ecfdf5; border: 2px solid #10b981; padding: 16px; border-radius: 6px; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🏥 Motor de Triagem Clínica</h1>
+    <p>Simulador Web interativo do Protocolo de Manchester (Min-Heap com Aging)</p>
+</header>
+
+<div class="container">
+    <!-- Formulário de Triagem -->
+    <div class="card">
+        <h2>Acolhimento & Sinais Vitais</h2>
+        <form id="triageForm">
+            <div class="form-group">
+                <label>Nome do Paciente</label>
+                <input type="text" id="nome" required placeholder="Ex: Maria Santos">
+            </div>
+            <div class="form-group">
+                <label>Saturação de Oxigênio - SpO2 (%)</label>
+                <input type="number" id="sato2" min="50" max="100" required value="95">
+            </div>
+            <div class="form-group">
+                <label>Frequência Cardíaca (bpm)</label>
+                <input type="number" id="fc" min="30" max="250" required value="80">
+            </div>
+            <div class="form-group">
+                <label>Pressão Sistólica (mmHg)</label>
+                <input type="number" id="pas" min="50" max="260" required value="120">
+            </div>
+            <div class="form-group">
+                <label>Nível de Dor (0 a 10)</label>
+                <input type="number" id="dor" min="0" max="10" required value="2">
+            </div>
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="dorPeito">
+                <label for="dorPeito" style="margin:0;">Dor torácica aguda (suspeita IAM)</label>
+            </div>
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="inconsciente">
+                <label for="inconsciente" style="margin:0;">Inconsciente / Desmaio súbito</label>
+            </div>
+            <button type="submit">Classificar & Enfileirar</button>
+        </form>
+    </div>
+
+    <!-- Fila e Chamada Médica -->
+    <div class="card">
+        <h2>Painel Médico de Atendimento</h2>
+        <div id="chamadaContainer" class="current-call" style="display:none;">
+            <span style="font-size: 0.85rem; color: #059669; font-weight: bold;">EM ATENDIMENTO:</span>
+            <div id="chamadaInfo"></div>
+        </div>
+
+        <button class="btn-call" id="btnChamar">Chamar Próximo (Prioridade Clínica)</button>
+
+        <h3 style="margin-top: 20px;">Fila de Espera (<span id="totalFila">0</span>)</h3>
+        <div id="filaContainer">
+            <p style="color: #94a3b8;">Nenhum paciente aguardando.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    let sequencial = 1000;
+    const fila = [];
+
+    const GRAVIDADES = {
+        VERMELHO: { nivel: 1, nome: "VERMELHO (Emergência - 0m)", classe: "bg-vermelho" },
+        LARANJA:  { nivel: 2, nome: "LARANJA (Muito Urgente - 10m)", classe: "bg-laranja" },
+        AMARELO:  { nivel: 3, nome: "AMARELO (Urgente - 60m)", classe: "bg-amarelo" },
+        VERDE:    { nivel: 4, nome: "VERDE (Pouco Urgente - 120m)", classe: "bg-verde" },
+        AZUL:     { nivel: 5, nome: "AZUL (Não Urgente - 240m)", classe: "bg-azul" }
+    };
+
+    function classificar(sinais) {
+        if (sinais.inconsciente || sinais.sato2 < 90 || sinais.pas < 80 || sinais.fc < 40) return GRAVIDADES.VERMELHO;
+        if (sinais.dorPeito || sinais.sato2 <= 94 || sinais.fc > 130 || sinais.dor >= 8) return GRAVIDADES.LARANJA;
+        if (sinais.pas >= 180 || sinais.fc >= 110 || sinais.dor >= 5) return GRAVIDADES.AMARELO;
+        if (sinais.dor > 0) return GRAVIDADES.VERDE;
+        return GRAVIDADES.AZUL;
+    }
+
+    document.getElementById('triageForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const sinais = {
+            sato2: parseInt(document.getElementById('sato2').value),
+            fc: parseInt(document.getElementById('fc').value),
+            pas: parseInt(document.getElementById('pas').value),
+            dor: parseInt(document.getElementById('dor').value),
+            dorPeito: document.getElementById('dorPeito').checked,
+            inconsciente: document.getElementById('inconsciente').checked
+        };
+
+        const gravidade = classificar(sinais);
+        const paciente = {
+            prontuario: `PR-${++sequencial}`,
+            nome: document.getElementById('nome').value,
+            gravidade: gravidade,
+            chegada: new Date()
+        };
+
+        fila.push(paciente);
+        // Min-Heap sorting logic: gravidade (asc) e depois horário (asc)
+        fila.sort((a, b) => a.gravidade.nivel - b.gravidade.nivel || a.chegada - b.chegada);
+
+        atualizarFila();
+        document.getElementById('triageForm').reset();
+    });
+
+    document.getElementById('btnChamar').addEventListener('click', () => {
+        if (fila.length === 0) return;
+        const chamado = fila.shift();
+        const container = document.getElementById('chamadaContainer');
+        const info = document.getElementById('chamadaInfo');
+
+        container.style.display = 'block';
+        info.innerHTML = `
+            <h3 style="margin:5px 0;">${chamado.nome} (${chamado.prontuario})</h3>
+            <span class="badge ${chamado.gravidade.classe}">${chamado.gravidade.nome}</span>
+        `;
+        atualizarFila();
+    });
+
+    function atualizarFila() {
+        document.getElementById('totalFila').innerText = fila.length;
+        const container = document.getElementById('filaContainer');
+        if (fila.length === 0) {
+            container.innerHTML = '<p style="color: #94a3b8;">Nenhum paciente aguardando.</p>';
+            return;
+        }
+
+        container.innerHTML = fila.map(p => `
+            <div class="patient-card" style="border-left-color: ${getCor(p.gravidade.nivel)}">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong>${p.nome}</strong>
+                    <span class="badge ${p.gravidade.classe}">${p.gravidade.nome.split(' ')[0]}</span>
+                </div>
+                <small style="color:#64748b;">Prontuário: ${p.prontuario} | Chegada: ${p.chegada.toLocaleTimeString()}</small>
+            </div>
+        `).join('');
+    }
+
+    function getCor(nivel) {
+        switch(nivel) {
+            case 1: return 'var(--vermelho)';
+            case 2: return 'var(--laranja)';
+            case 3: return 'var(--amarelo)';
+            case 4: return 'var(--verde)';
+            default: return 'var(--azul)';
+        }
+    }
+</script>
+
+</body>
+</html>
